@@ -1,0 +1,119 @@
+import streamlit as st
+import pandas as pd
+import locale
+import numpy as np
+
+st.set_page_config(layout="wide")
+
+# Définir la locale pour le formatage monétaire
+locale.setlocale(locale.LC_ALL, 'fr_FR.UTF-8')
+
+def format_currency_fr(value):
+    return locale.currency(value, symbol=True, grouping=True)
+
+def format_percentage(value):
+    return f"{value:.2%}" if not pd.isna(value) else ""
+
+def afficher_disponibles(sheet):
+    # Lit le fichier Excel
+
+    file_path = "Y:/Taxes-Finances/MEUNIER Fred 2023/plateforme/data.xlsx"
+    df = pd.read_excel(file_path, sheet_name=sheet)
+
+    formatted_columns = [2020, 2021, 2022, 2023, 'engagements', 'quart', 'disponible']
+    for col in formatted_columns:
+        df[col] = df[col].apply(lambda x: format_currency_fr(x) if not pd.isna(x) else "")
+
+    df['util'] = df['util'].apply(format_percentage)  # Appliquer le format de pourcentage à la colonne 'util'
+
+    st.title('Disponibles')
+    st.dataframe(df)
+
+    file_path = "Y:/Taxes-Finances/MEUNIER Fred 2023/plateforme/engagements.xlsx"
+    selected_article = st.selectbox('Choisissez un article:', df['Articles'].unique())
+
+    # Charger l'onglet "libellé"
+    depenses_df = pd.read_excel(file_path, sheet_name='engagements', thousands=' ')
+
+    # Filtrer les dépenses pour l'article sélectionné
+    depenses_filtered = depenses_df[depenses_df['Article'] == selected_article]
+
+    # Sélectionner les colonnes spécifiques
+    columns_to_display = ["Article","Libellé", "Montant TTC ( € )", "Libellé Tiers"]
+    depenses_filtered = depenses_filtered[columns_to_display]
+
+    # Formater la colonne Montant TTC ( € )
+    depenses_filtered["Montant TTC ( € )"] = depenses_filtered["Montant TTC ( € )"].apply(format_currency_fr)
+
+    # Formater les autres colonnes numériques
+    depenses_filtered = depenses_filtered.applymap(lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) else x)
+
+    # Affiche les dépenses filtrées
+    st.subheader('Dépenses pour cet article:')
+    st.dataframe(depenses_filtered)
+
+
+
+
+# Dictionnaire pour mapper les logins aux onglets
+login_mapping = {
+    "didier": "env",
+    "superjojo": "ht",
+    # ... autres logins
+}
+
+def format_currency_custom(value):
+    if pd.notna(value):
+        try:
+            numeric_value = float(value)
+            return f"{numeric_value:,.2f} €".replace(",", "#").replace(".", ",").replace("#", ".")
+        except ValueError:
+            return value
+    else:
+        return ""
+
+def afficher_extra(sheet):
+    st.title("SERVICE EXTRAORDINAIRE")
+    st.title("Programmes d'investissement et voies et moyens de financement")
+    file_path = 'Y:/Taxes-Finances/MEUNIER Fred 2023/plateforme/TABLEAU DES VOIES ET MOYENS.xlsx'
+    df = pd.read_excel(file_path, engine='openpyxl')
+
+    # Remplacer les valeurs numpy.nan et 'nan' par des cellules vides
+    df = df.replace([np.nan, 'nan'], "")
+
+    # Formater les colonnes "Dépenses" et "Empts commune" en euros monétaires
+    df[['Dépenses', 'Empts commune','Empts état./R.W.','Subsides','Sinistre','Fonds Réserves']] = df[['Dépenses', 'Empts commune','Empts état./R.W.','Subsides','Sinistre','Fonds Réserves']].applymap(format_currency_custom)
+
+    # Afficher la table
+    st.table(df)
+
+
+
+
+# Champ de texte pour le login
+login = st.sidebar.text_input("Entrez votre login:")
+
+# Menu dans la barre latérale avec "Disponibles" comme option par défaut
+
+option = st.sidebar.selectbox(
+    'Choisissez une page:',
+    ('Articles Extraordinaires','Articles Ordinaires' ,'Bon de commande','Modification budgétaire', 'Budget'),
+    index=1  # L'index de l'option par défaut (0-based)
+)
+
+# Vérifie si le login est dans le dictionnaire
+if login in login_mapping:
+    sheet = login_mapping[login]
+
+    if option == 'Bon de commande':
+        st.write("Contenu de la page Bon de commande.")
+    elif option == 'Articles Extraordinaires':
+        afficher_extra(sheet)  # Appel avec l'argument "sheet"
+    elif option == 'Articles Ordinaires':
+        afficher_disponibles(sheet)
+    elif option == 'Modification budgétaire':
+        st.write("Contenu de la page Modification budgétaire.")
+    elif option == 'Budget':
+        st.write("Contenu de la page Budget.")
+else:
+    st.warning("Login incorrect. Veuillez réessayer.")
